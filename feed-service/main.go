@@ -33,7 +33,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	addr := fmt.Sprintf("poastgres://%s:%s@postgres/%s?sslmode=disable", cfg.PostgresUser, cfg.PostgresPassword, cfg.PostgresDB)
+	addr := fmt.Sprintf("postgres://%s:%s@postgres/%s?sslmode=disable", cfg.PostgresUser, cfg.PostgresPassword, cfg.PostgresDB)
 	fmt.Println(addr)
 
 	repo, err := database.NewPostgresRepository(addr)
@@ -45,7 +45,7 @@ func main() {
 
 	repository.SetRepository(repo)
 
-	n, err := events.NewNatsEventStore(cfg.NatsAddress)
+	n, err := events.NewNatsEventStore(fmt.Sprintf("nats://%s",cfg.NatsAddress))
 	if err != nil {
 		log.Fatal(err)
 	}

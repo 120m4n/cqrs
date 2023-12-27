@@ -11,15 +11,68 @@ services:
       POSTGRES_DB: mydb
     ports:
       - 5432:5432
-    volumes:
-      - ./postgres-data:/var/lib/postgresql/data
   nats:
     image: nats-streaming:latest
     container_name: platzi-events-cqrs-nats
     restart: always
-    environment:
-      - "discovery.type=single-node"
     ports:
       - 4222:4222
       - 8222:8222
       - 6222:6222
+  elasticsearch:
+    image: "elasticsearch:7.17.16"
+    environment:
+      - "discovery.type=single-node"
+  feed:
+    build: "."
+    container_name: platzi-events-cqrs-feed
+    command: "feed-service"
+    restart: always
+    environment:
+      NATS_ADDRESS: nats:4222
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
+    ports:
+      - 8080
+    depends_on:
+      - postgres
+      - nats
+  query:
+    build: "."
+    container_name: platzi-events-cqrs-query
+    command: "query-service"
+    restart: always
+    environment:
+      NATS_ADDRESS: nats:4222
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
+      ELASTICSEARCH_ADDRESS: elasticsearch:9200
+    ports:
+      - 8080
+    depends_on:
+      - postgres
+      - nats
+      - elasticsearch
+  pusher:
+    build: "."
+    container_name: platzi-events-cqrs-pusher
+    command: "pusher-service"
+    restart: always
+    environment:
+      NATS_ADDRESS: nats:4222
+    ports:
+      - 8080
+    depends_on:
+      - nats
+  nginx:
+    build: "./nginx"
+    container_name: platzi-events-cqrs-nginx
+    restart: always
+    ports:
+      - 8080:80
+    depends_on:
+      - feed
+      - query
+      - pusher

@@ -44,5 +44,9 @@ func createdFeedHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(feed)
+	if err := json.NewEncoder(w).Encode(feed); err != nil {
+		log.Printf("error encoding response body: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }

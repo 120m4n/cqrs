@@ -5,10 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"log"
 	"strconv"
 
 	"github.com/120m4n/cqrs/models"
 	elastic "github.com/elastic/go-elasticsearch/v7"
+	"github.com/mitchellh/mapstructure"
 )
 
 type ElasticSearchRepository struct {
@@ -57,46 +61,54 @@ func (e *ElasticSearchRepository) SearchFeeds(ctx context.Context, query string)
 					"description",
 				},
 				"fuzziness": 3,
-				"cut_off_frequency": 0.001,
+				// "cut_off_frequency": 0.0001, // Remove this line
 			},
 		},
 	}
 
 	if err := json.NewEncoder(&buf).Encode(searchQuery); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to encode search query: %w", err)
 	}
-	
+
 	res, err := e.client.Search(
 		e.client.Search.WithContext(ctx),
 		e.client.Search.WithIndex("feeds"),
 		e.client.Search.WithBody(&buf),
 		e.client.Search.WithTrackTotalHits(true),
-		e.client.Search.WithPretty(),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	defer func(){
+	defer func() {
 		if err := res.Body.Close(); err != nil {
 			results = nil
 		}
-	}() 
+	}()
 
 	if res.IsError() {
-		return nil, errors.New(res.String())
+		return nil, errors.New("elasticsearch error " + res.String())
 	}
 
 	var eRes map[string]interface{}
 	if err := json.NewDecoder(res.Body).Decode(&eRes); err != nil {
-		return nil, err
+		if errors.Is(err, io.EOF) {
+			// Handle EOF error specifically
+			log.Println("Reached the end of the file or stream unexpectedly")
+		} else {
+			return nil, fmt.Errorf("failed to decode response body: %w", err)
+		}
 	}
 
 	feeds := make([]*models.Feed, 0, len(eRes))
 	for _, hit := range eRes["hits"].(map[string]interface{})["hits"].([]interface{}) {
+		source, ok := hit.(map[string]interface{})["_source"].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("failed to convert _source to map[string]interface{}")
+		}
 		feed := new(models.Feed)
-		if err := json.Unmarshal(hit.(map[string]interface{})["_source"].([]byte), feed); err != nil {
-			return nil, err
+		if err := mapstructure.Decode(source, &feed); err != nil {
+			return nil, fmt.Errorf("failed to decode source to feed: %w", err)
 		}
 		feeds = append(feeds, feed)
 	}
