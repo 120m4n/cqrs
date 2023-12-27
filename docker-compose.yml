@@ -1,0 +1,25 @@
+version: "3.7"
+
+services:
+  postgres:
+    build: ./database
+    container_name: platzi-events-cqrs-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
+    ports:
+      - 5432:5432
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+  nats:
+    image: nats-streaming:latest
+    container_name: platzi-events-cqrs-nats
+    restart: always
+    environment:
+      - "discovery.type=single-node"
+    ports:
+      - 4222:4222
+      - 8222:8222
+      - 6222:6222
